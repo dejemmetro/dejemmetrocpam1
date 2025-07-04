@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8" />
+  <title>Assinar PDF - PMESP</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background: #f4f4f4;
+      text-align: center;
+    }
+    canvas {
+      border: 2px solid #333;
+      touch-action: none;
+      max-width: 100%;
+    }
+    select, input, button {
+      padding: 10px;
+      margin: 10px 0;
+      font-size: 16px;
+      width: 100%;
+      max-width: 400px;
+      box-sizing: border-box;
+    }
+    #pdfViewer {
+      display: none;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <button onclick="window.location.href='escala.html'" style="margin-bottom: 20px; padding: 10px 20px; font-size: 16px;">
+    ← Voltar
+  </button>
+
+  <h2>Envie o PDF para assinar:</h2>
+  <input type="file" id="pdfInput" accept="application/pdf" /><br />
+
+  <label for="postoGrad">POSTO/GRADUAÇÃO:</label><br />
+  <select id="postoGrad" required>
+    <option value="" disabled selected>Selecione o Posto/Graduação</option>
+    <option>SD PM</option>
+    <option>CB PM</option>
+    <option>3º SGT PM</option>
+    <option>2º SGT PM</option>
+    <option>1º SGT PM</option>
+    <option>SUBTEN PM</option>
+    <option>2º TEN PM</option>
+    <option>1º TEN PM</option>
+    <option>CAP PM</option>
+    <option>MAJ PM</option>
+    <option>TEN CEL PM</option>
+  </select><br />
+
+  <label for="re">RE (formato 000000-0):</label><br />
+  <input
+    type="text"
+    id="re"
+    maxlength="8"
+    placeholder="000000-0"
+    oninput="formatarRE(this)"
+    required
+  /><br />
+
+  <label for="nomeCompleto">NOME COMPLETO:</label><br />
+  <input
+    type="text"
+    id="nomeCompleto"
+    placeholder="JOSE DOS SANTOS SILVA"
+    oninput="this.value = this.value.toUpperCase()"
+    required
+  /><br />
+
+  <div id="pdfViewer">
+    <p>Assine abaixo:</p>
+    <canvas id="signatureCanvas" width="400" height="200"></canvas><br />
+    <button onclick="clearSignature()">Limpar Assinatura</button>
+    <button onclick="addSignatureToPdf()">Salvar PDF Assinado</button>
+  </div>
+
+  <script>
+    let signatureCanvas = document.getElementById("signatureCanvas");
+    let ctx = signatureCanvas.getContext("2d");
+    let drawing = false;
+
+    function startDraw(e) {
+      drawing = true;
+      ctx.beginPath();
+      ctx.moveTo(e.offsetX, e.offsetY);
+    }
+
+    function draw(e) {
+      if (!drawing) return;
+      ctx.lineTo(e.offsetX, e.offsetY);
+      ctx.stroke();
+    }
+
+    function stopDraw() {
+      drawing = false;
+    }
+
+    signatureCanvas.addEventListener("mousedown", startDraw);
+    signatureCanvas.addEventListener("mousemove", draw);
+    signatureCanvas.addEventListener("mouseup", stopDraw);
+    signatureCanvas.addEventListener("mouseout", stopDraw);
+
+    signatureCanvas.addEventListener("touchstart", function (e) {
+      e.preventDefault();
+      const touch = e.touches[0];
+      const rect = signatureCanvas.getBoundingClientRect();
+      ctx.beginPath();
+      ctx.moveTo(touch.clientX - rect.left, touch.clientY - rect.top);
+      drawing = true;
+    });
+
+    signatureCanvas.addEventListener("touchmove", function (e) {
+      e.preventDefault();
+      if (!drawing) return;
+      const touch = e.touches[0];
+      const rect = signatureCanvas.getBoundingClientRect();
+      ctx.lineTo(touch.clientX - rect.left, touch.clientY - rect.top);
+      ctx.stroke();
+    });
+
+    signatureCanvas.addEventListener("touchend", function () {
+      drawing = false;
+    });
+
+    function clearSignature() {
+      ctx.clearRect(0, 0, signatureCanvas.width, signatureCanvas.height);
+    }
+
+    let uploadedPdfBytes = null;
+
+    document.getElementById("pdfInput").addEventListener("change", async function (event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      uploadedPdfBytes = await file.arrayBuffer();
+      document.getElementById("pdfViewer").style.display = "block";
+    });
+
+    function formatarRE(input) {
+      let valor = input.value.replace(/\D/g, ""); // Remove tudo que não for número
+      if (valor.length > 6) {
+        valor = valor.substring(0, 6) + '-' + valor.substring(6, 7);
+      }
+      input.value = valor;
+    }
+
+    function validarRE(re) {
+      const reRegex = /^\d{6}-\d$/;
+      return reRegex.test(re);
+    }
+
+    async function addSignatureToPdf() {
+      const postoGrad = document.getElementById("postoGrad").value.trim();
+      const re = document.getElementById("re").value.trim();
+      const nomeCompleto = document.getElementById("nomeCompleto").value.trim();
+
+      if (!uploadedPdfBytes) return alert("Envie um PDF primeiro.");
+      if (!postoGrad) return alert("Selecione o POSTO/GRADUAÇÃO.");
+      if (!validarRE(re)) return alert("RE inválido! Use o formato 000000-0.");
+      if (!nomeCompleto) return alert("Preencha o NOME COMPLETO.");
+
+      const textoFinal = `${postoGrad} ${re} ${nomeCompleto}`;
+
+      const { PDFDocument, rgb, StandardFonts } = PDFLib;
+      const pdfDoc = await PDFDocument.load(uploadedPdfBytes);
+      const pages = pdfDoc.getPages();
+      const firstPage = pages[0];
+
+      const signatureDataUrl = signatureCanvas.toDataURL("image/png");
+      const pngImageBytes = await fetch(signatureDataUrl).then(res => res.arrayBuffer());
+      const pngImage = await pdfDoc.embedPng(pngImageBytes);
+      const pngDims = pngImage.scale(0.3);
+
+      const { width, height } = firstPage.getSize();
+      const metade = width / 2;
+      const faixaDireitaLargura = width / 2;
+      const signatureX = metade + (faixaDireitaLargura - pngDims.width) / 2;
+      const signatureY = 80;
+
+      firstPage.drawImage(pngImage, {
+        x: signatureX,
+        y: signatureY,
+        width: pngDims.width,
+        height: pngDims.height,
+      });
+
+      const font = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+      const textSize = 10;
+      const textWidth = font.widthOfTextAtSize(textoFinal, textSize);
+      const textX = metade + (faixaDireitaLargura - textWidth) / 2;
+      const textY = signatureY - textSize - 5;
+
+      firstPage.drawText(textoFinal, {
+        x: textX,
+        y: textY,
+        size: textSize,
+        font: font,
+        color: rgb(0, 0, 0),
+      });
+
+      const pdfBytes = await pdfDoc.save();
+      const blob = new Blob([pdfBytes], { type: "application/pdf" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "Parte Ass - " + nomeCompleto + ".pdf";
+      link.click();
+    }
+  </script>
+</body>
+</html>

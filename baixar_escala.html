@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <title>Download de PDFs - PMESP</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background: #f4f4f4;
+    }
+    h1 {
+      font-size: 20px;
+    }
+    select, button {
+      padding: 10px;
+      margin-top: 15px;
+      font-size: 16px;
+      width: 100%;
+    }
+    #downloadLink {
+      display: none;
+      margin-top: 20px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <button onclick="window.location.href='escala.html'" style="margin-bottom: 20px; padding: 10px 20px; font-size: 16px;">
+    ← Voltar
+  </button>
+
+  <h1>Selecione o PDF para baixar:</h1>
+  <select id="pdfSelect">
+    <option value="">Carregando arquivos...</option>
+  </select>
+  <button id="downloadLink">Baixar PDF</button>
+
+  <script>
+    const folderId = '1oxN_3QExyF5kuqnQ42OKHW2P7RSaA6Ia';
+    const apiKey = 'AIzaSyCl0GNoIeLBghQJEYtVtqqhOiQdhu8f7uU';
+
+    const select = document.getElementById('pdfSelect');
+    const downloadBtn = document.getElementById('downloadLink');
+
+    async function loadFiles() {
+      const url = `https://www.googleapis.com/drive/v3/files?q='${folderId}'+in+parents+and+mimeType='application/pdf'&fields=files(id,name)&key=${apiKey}`;
+      try {
+        const res = await fetch(url);
+        const data = await res.json();
+
+        if (!data.files || data.files.length === 0) {
+          select.innerHTML = '<option value="">Nenhum PDF encontrado</option>';
+          return;
+        }
+
+        select.innerHTML = '<option value="">Selecione um arquivo</option>';
+
+        data.files.forEach(file => {
+          const option = document.createElement('option');
+          option.value = file.id;
+          option.textContent = file.name;
+          select.appendChild(option);
+        });
+      } catch (error) {
+        console.error('Erro ao carregar arquivos:', error);
+        select.innerHTML = '<option value="">Erro ao carregar arquivos</option>';
+      }
+    }
+
+    select.addEventListener('change', () => {
+      if (select.value) {
+        const fileId = select.value;
+        const downloadUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
+        downloadBtn.style.display = 'block';
+        downloadBtn.onclick = () => {
+          window.open(downloadUrl, '_blank');
+        };
+      } else {
+        downloadBtn.style.display = 'none';
+      }
+    });
+
+    loadFiles();
+  </script>
+</body>
+</html>
